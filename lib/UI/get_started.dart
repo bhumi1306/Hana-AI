@@ -2,9 +2,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:hana_ai/UI/login.dart';
 import 'package:hana_ai/widgets/background.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../Utility/commons.dart';
 import '../widgets/animated_button.dart';
+import '../widgets/bottom_menu.dart';
 
 class GetStarted extends StatefulWidget {
   const GetStarted({super.key});
@@ -57,6 +59,37 @@ class _GetStartedState extends State<GetStarted>
     super.dispose();
   }
 
+  void getStarted() async{
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+
+    if(isLoggedIn){
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            transitionDuration: const Duration(milliseconds: 800),
+            pageBuilder: (context, animation, secondaryAnimation) =>
+            const GlassNavBar(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              const begin = Offset(1.0, 0.0); // start from right
+              const end = Offset.zero;        // end at center
+              final tween = Tween(begin: begin, end: end)
+                  .chain(CurveTween(curve: Curves.easeInOut));
+
+              return SlideTransition(
+                position: animation.drive(tween),
+                child: child,
+              );
+            },
+          ),
+        );
+    }
+    else{
+      Navigator.push(context,
+        MaterialPageRoute(builder: (context) => LoginScreen()),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -89,80 +122,51 @@ class _GetStartedState extends State<GetStarted>
                 },
                 child: Image.asset(
                   "assets/images/app-logo-transp.png",
-                  height: screenHeight * 0.6,
+                  height: screenHeight * 0.5,
                   width: screenWidth *0.8,
                   fit: BoxFit.contain,
                 ),
               ),
-        
+              SizedBox(height: screenHeight * 0.02),
               /// Bottom section
-              Padding(
-                padding: EdgeInsets.only(bottom: screenHeight * 0.1),
-                child: Column(
-                  children: [
-                    Text(
-                      'Welcome to Hana-AI !',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontSize: screenWidth * 0.075,
-                        fontWeight: FontWeight.w900,
-                        fontFamily: fontFamily,
-                      ),
+              Column(
+                children: [
+                  Text(
+                    'Welcome to Hana-AI !',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontSize: screenWidth * 0.07,
+                      fontWeight: FontWeight.w900,
+                      fontFamily: fontFamily,
                     ),
-                    SizedBox(height: screenHeight * 0.015),
-                    Text(
-                      'Meet Our AI Assistant: Your Go-To For Instant Answers To Any Question.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: theme.colorScheme.onPrimary,
-                        fontSize: screenWidth * 0.05,
-                        fontWeight: FontWeight.w700,
-                        fontFamily: fontFamily,
-                      ),
+                  ),
+                  SizedBox(height: screenHeight * 0.015),
+                  Text(
+                    'Meet Our AI Assistant: Your Go-To For Instant Answers To Any Question.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: theme.colorScheme.onPrimary,
+                      fontSize: screenWidth * 0.04,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: fontFamily,
                     ),
-                    SizedBox(height: screenHeight * 0.04),
-                    AnimatedButton(
-                      text: 'Get Started',
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (context) => LoginScreen()),
-                          );
-                        },
-                      background: [theme.colorScheme.primaryContainer, theme.colorScheme.primary], // optional
-                    )
-                    // ElevatedButton(
-                    //   onPressed: () {
-                    //     Navigator.push(
-                    //       context,
-                    //       MaterialPageRoute(builder: (context) => LoginScreen()),
-                    //     );
-                    //   },
-                    //   style: ElevatedButton.styleFrom(
-                    //     foregroundColor: theme.colorScheme.onPrimary,
-                    //     backgroundColor: theme.colorScheme.primary,
-                    //     elevation: 7,
-                    //     padding: EdgeInsets.symmetric(
-                    //       horizontal: screenWidth * 0.2,
-                    //       vertical: 16,
-                    //     ),
-                    //     shape: RoundedRectangleBorder(
-                    //       borderRadius: BorderRadius.circular(12),
-                    //     ),
-                    //   ),
-                    //   child: Text(
-                    //     "Get Started",
-                    //     style: TextStyle(
-                    //       color: theme.colorScheme.onPrimary,
-                    //       fontSize: screenWidth * 0.04,
-                    //       fontWeight: FontWeight.bold,
-                    //     ),
-                    //   ),
-                    // ),
-                  ],
-                ),
+                  ),
+                  SizedBox(height: screenHeight * 0.02),
+                  AnimatedButton(
+                    text: 'Get Started',
+                      onPressed: () {
+                        getStarted();
+                        // Navigator.push(
+                        //   context,
+                        //   MaterialPageRoute(builder: (context) => LoginScreen()),
+                        // );
+                      },
+                    background: [theme.colorScheme.primaryContainer, theme.colorScheme.primary], // optional
+                  )
+                ],
               ),
+              SizedBox(height: screenHeight * 0.02),
             ],
           ),
         ),

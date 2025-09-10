@@ -1,9 +1,16 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:hana_ai/Services/register.dart';
 import 'package:hana_ai/UI/login.dart';
+import 'package:hana_ai/UI/verify_otp.dart';
+import 'package:http/http.dart' as http;
 
 import '../Utility/commons.dart';
+import '../Utility/snackbar.dart';
 import '../widgets/background.dart';
 import '../widgets/button.dart';
 import '../widgets/text_field.dart';
@@ -24,6 +31,8 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
   final TextEditingController confirmPasswordController = TextEditingController();
   bool obscurePassword = true;
   bool obscureConfirmPassword = true;
+  RegisterUser registerUser = RegisterUser();
+  bool isLoading = false;
 
   late AnimationController _floatController;
   late Animation<double> _floatAnimation;
@@ -116,12 +125,48 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
   }
 
   /// Function that validates form and navigates
-  void _handleRegister() {
+  void _handleRegister() async{
     if (_formKey.currentState!.validate()) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      setState(() {
+        isLoading = true;  // Show loader
+      });
+
+      try {
+        // Call the API to register the user
+        http.Response response = await registerUser.registerUser(usernameController.text.trim(),
+            emailController.text.trim(), passwordController.text.trim())
+            .timeout(Duration(seconds: 15),);
+
+        final body = json.decode(response.body);
+
+        if (response.statusCode == 200) {
+          Map<String, dynamic> responseBody = jsonDecode(response.body);
+          String email = emailController.text.trim();
+          int tempId = responseBody['temp_user_id'];
+          SnackBarUtil.show(context, message: "OTP sent successfully.", icon: Icons.mail,);
+          showEmailVerificationSheet(context,email,tempId);
+        } else if (response.statusCode == 400) {
+          String message = body['message'];
+          debugPrint(response.body);
+          SnackBarUtil.show(context, message: message, icon: Icons.error,);
+        }
+        else {
+          debugPrint(response.body);
+          SnackBarUtil.show(context, message: 'Please try again.', icon: Icons.error,);
+        }
+      } on TimeoutException catch (_) {
+        setState(() {
+          isLoading = false; // Hide loading indicator on timeout
+        });
+        SnackBarUtil.show(context, message: 'Please try again.', icon: Icons.error,);
+      }catch (e) {
+        debugPrint('Exception caught in register : $e');
+        SnackBarUtil.show(context, message: 'Please try again.', icon: Icons.error,);
+      } finally {
+        setState(() {
+          isLoading = false;  // Hide loader
+        });
+      }
     }
   }
   @override

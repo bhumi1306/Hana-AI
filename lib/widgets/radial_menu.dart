@@ -35,7 +35,9 @@ class _ArcMenuState extends State<ArcMenu> with SingleTickerProviderStateMixin {
 
   // angles for the 3 items (degrees). These point to top-right quadrant.
   // You can tweak these values to move the arc.
-  final List<double> _defaultAngles = [-75, -35, 15];
+  List<double> _generateAngles(int count, {double start = -75, double step = 30}) {
+    return List.generate(count, (i) => start + i * step);
+  }
 
   @override
   void initState() {
@@ -58,10 +60,11 @@ class _ArcMenuState extends State<ArcMenu> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildItem(int index, IconData icon) {
-    final angleDeg = (index < _defaultAngles.length)
-        ? _defaultAngles[index]
+    final List<double> defaultAngles = _generateAngles(widget.icons.length);
+    final angleDeg = (index < defaultAngles.length)
+        ? defaultAngles[index]
         : -35 + index * -20; // fallback
-    final angle = angleDeg * (math.pi / 180);
+    final angle = angleDeg * (math.pi / 150);
     final theme = Theme.of(context);
 
     return AnimatedBuilder(
@@ -76,34 +79,35 @@ class _ArcMenuState extends State<ArcMenu> with SingleTickerProviderStateMixin {
           child: Opacity(
             opacity: _controller.value,
             child: Transform.scale(
-              scale: 0.6 + 0.4 * _controller.value,
+              scale: 0.5 + 0.3 * _controller.value,
               child: child,
             ),
           ),
         );
       },
-      child: GestureDetector(
-        onTap: () {
-          widget.onIconPressed(index);
-          // close the menu after tap
-          _toggle();
-        },
-        child: Container(
-          width: widget.itemSize,
-          height: widget.itemSize,
-          decoration: BoxDecoration(
-            color: widget.itemColor,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.18),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
-              )
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Icon(icon, color: theme.colorScheme.primary),
+      child: Container(
+        width: widget.itemSize,
+        height: widget.itemSize,
+        decoration: BoxDecoration(
+          color: widget.itemColor,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.18),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            )
+          ],
+        ),
+        alignment: Alignment.center,
+        child: GestureDetector
+          (
+            onTap: () {
+              widget.onIconPressed(index);
+              // close the menu after tap
+              _toggle();
+            },
+            child: Icon(icon, color: theme.colorScheme.primary)
         ),
       ),
     );

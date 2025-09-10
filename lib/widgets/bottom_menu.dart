@@ -102,13 +102,13 @@ class _GlassNavBarState extends State<GlassNavBar> {
                 //remove extra padding under labels
                 selectedFontSize: 12,
                 unselectedFontSize: 11,
-                selectedLabelStyle: const TextStyle(height: 0.12),
-                unselectedLabelStyle: const TextStyle(height: 0.12),
+                selectedLabelStyle: const TextStyle(height: 1.0),
+                unselectedLabelStyle: const TextStyle(height: 1.0),
                 items: List.generate(
                   _icons.length,
                       (index) => BottomNavigationBarItem(
                     icon: Container(
-                      padding: EdgeInsets.all(8),
+                      padding: EdgeInsets.all(6),
                       decoration: _selectedIndex == index
                           ? BoxDecoration(
                         gradient: LinearGradient(

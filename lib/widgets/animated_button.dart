@@ -81,8 +81,7 @@ class _AnimatedButtonState extends State<AnimatedButton>
                   glowColor: Colors.white,
                 ),
                 child: Container(
-                  padding:
-                  const EdgeInsets.symmetric(vertical: 18, horizontal: 40),
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 30),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(colors: widget.background),
                     borderRadius: BorderRadius.circular(widget.radius),
@@ -125,7 +124,7 @@ class _FloatingContent extends StatelessWidget {
               Transform.rotate(
                 angle: progress * 2 * math.pi,
                 child: const Icon(Icons.auto_awesome,
-                    size: 22, color: Colors.white),
+                    size: 18, color: Colors.white),
               ),
               Positioned(
                 left: -8,
@@ -145,7 +144,7 @@ class _FloatingContent extends StatelessWidget {
           Text(
             text,
             style: const TextStyle(
-              fontSize: 18,
+              fontSize: 14,
               fontWeight: FontWeight.w700,
               color: Colors.white,
               letterSpacing: 0.2,

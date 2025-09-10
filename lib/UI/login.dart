@@ -1,12 +1,26 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:hana_ai/Services/google_auth.dart';
+import 'package:hana_ai/Services/login.dart';
 import 'package:hana_ai/UI/home.dart';
 import 'package:hana_ai/UI/register.dart';
 import 'package:hana_ai/widgets/bottom_menu.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../Services/google_auth.dart' as google;
 import '../Utility/commons.dart';
+import '../Utility/snackbar.dart';
 import '../widgets/background.dart';
 import '../widgets/button.dart';
+import '../widgets/loader.dart';
 import '../widgets/text_field.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -22,6 +36,12 @@ class _LoginScreenState extends State<LoginScreen>
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool obscurePassword = true;
+  bool isLoading = false;
+  LoginUser loginUser = LoginUser();
+  final FlutterSecureStorage storage = const FlutterSecureStorage();
+  final FirebaseAuth auth = FirebaseAuth.instance;
+  final GoogleSignIn googleSignIn = GoogleSignIn();
+  RegisterGoogle registerGoogle = RegisterGoogle();
 
   late AnimationController _floatController;
   late Animation<double> _floatAnimation;
@@ -31,6 +51,7 @@ class _LoginScreenState extends State<LoginScreen>
   late Animation<double> _scaleWelcome;
   late Animation<double> _slideForm;
   late Animation<double> _fadeForm;
+
 
   @override
   void initState() {
@@ -84,29 +105,176 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   /// Function that validates form and navigates with slide animation
-  void _handleLogin() {
+  void _handleLogin() async{
     if (_formKey.currentState!.validate()) {
-      Navigator.of(context).push(
-        PageRouteBuilder(
-          transitionDuration: const Duration(milliseconds: 800),
-          pageBuilder: (context, animation, secondaryAnimation) =>
-          const GlassNavBar(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            const begin = Offset(1.0, 0.0); // start from right
-            const end = Offset.zero;        // end at center
-            final tween = Tween(begin: begin, end: end)
-                .chain(CurveTween(curve: Curves.easeInOut));
+      try {
+        if (mounted) {
+          setState(() {
+            isLoading = true;
+          });
+        }
+        http.Response response = await loginUser.loginUser(emailController.text.trim(), passwordController.text.trim()).timeout(Duration(seconds: 15),);
 
-            return SlideTransition(
-              position: animation.drive(tween),
-              child: child,
+        if (response.statusCode == 200) {
+          Map<String, dynamic> responseBody = jsonDecode(response.body);
+
+          final int id = responseBody['user']['id'];
+          final String username = responseBody['user']['username'];
+          final token = responseBody['token'];
+
+          await storage.write(key: 'token', value: token);
+
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('id', id);
+          await prefs.setString('username', username);
+
+          if (kDebugMode) {
+            print('id: $id');
+            print(token);
+          }
+          prefs.setBool('isLoggedIn', true);
+
+          if (mounted) {
+            setState(() {
+              isLoading = false;
+            });
+          }
+
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              PageRouteBuilder(
+                transitionDuration: const Duration(milliseconds: 800),
+                pageBuilder: (context, animation, secondaryAnimation) =>
+                const GlassNavBar(),
+                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                  const begin = Offset(1.0, 0.0); // start from right
+                  const end = Offset.zero;        // end at center
+                  final tween = Tween(begin: begin, end: end)
+                      .chain(CurveTween(curve: Curves.easeInOut));
+
+                  return SlideTransition(
+                    position: animation.drive(tween),
+                    child: child,
+                  );
+                },
+              ),
             );
-          },
-        ),
-      );
+            SnackBarUtil.show(context, message: 'Logged in successfully.', icon: Icons.check_circle,);
+          }
+        } else {
+          if (mounted) {
+            //Navigator.of(context).pop();
+            SnackBarUtil.show(context, message: 'Please try again', icon: Icons.error,);
+          }
+        }
+      }
+      on TimeoutException catch (_) {
+        setState(() {
+          isLoading = false; // Hide loading indicator on timeout
+        });
+        SnackBarUtil.show(context, message: 'Please try again.', icon: Icons.error,);
+      }
+      catch (e) {
+        debugPrint('Exception in login: $e');
+        SnackBarUtil.show(context, message: 'Please try again.', icon: Icons.error,);;
+      }
+      finally {
+        setState(() {
+          isLoading = false;  // Hide loader
+        });
+      }
     }
   }
 
+  Future<void> signInWithGoogle() async {
+    try {
+      await googleSignIn.signOut();
+      // Trigger Google Sign-In, which will show the account selection screen
+      final GoogleSignInAccount? googleSignInAccount = await googleSignIn.signIn();
+      if (googleSignInAccount != null) {
+        final GoogleSignInAuthentication googleSignInAuthentication = await googleSignInAccount.authentication;
+        final AuthCredential credential = GoogleAuthProvider.credential(
+            idToken: googleSignInAuthentication.idToken,
+            accessToken: googleSignInAuthentication.accessToken);
+        setState(() {
+          isLoading = true;
+        });
+        debugPrint('$credential');
+        UserCredential userCredential = await auth.signInWithCredential(credential);
+        debugPrint('$userCredential');
+        // Extract Firebase User data
+        User? user = userCredential.user;
+        final idToken = await user!.getIdToken();
+
+        debugPrint("Firebase ID token: $idToken");
+        debugPrint('Uid: ${user!.uid}');
+        try {
+          final response = await registerGoogle.registerGoogle(idToken!);
+          if (response.statusCode == 200) {
+            Map<String, dynamic> responseBody = jsonDecode(response.body);
+            final int id = responseBody['user']['id'];
+            final String username = responseBody['user']['username'];
+            final token = responseBody['token'];
+
+            await storage.write(key: 'token', value: token);
+
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setInt('id', id);
+            await prefs.setString('username', username);
+
+            if (kDebugMode) {
+              print('id: $id');
+              print(token);
+            }
+            await prefs.setBool('isLoggedIn', true);
+
+            if (mounted) {
+              setState(() {
+                isLoading = false;
+              });
+              if (mounted) {
+                Navigator.of(context).pushReplacement(
+                  PageRouteBuilder(
+                    transitionDuration: const Duration(milliseconds: 800),
+                    pageBuilder: (context, animation, secondaryAnimation) =>
+                    const GlassNavBar(),
+                    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                      const begin = Offset(1.0, 0.0); // start from right
+                      const end = Offset.zero;        // end at center
+                      final tween = Tween(begin: begin, end: end)
+                          .chain(CurveTween(curve: Curves.easeInOut));
+
+                      return SlideTransition(
+                        position: animation.drive(tween),
+                        child: child,
+                      );
+                    },
+                  ),
+                );
+                SnackBarUtil.show(context, message: 'Logged in successfully.', icon: Icons.check_circle,);
+              }
+
+            }
+          }
+        } catch (e) {
+          setState(() {
+            isLoading = false;
+          });
+          debugPrint('Google login exception: $e');
+          SnackBarUtil.show(context, message: 'Please try again.', icon: Icons.error,);
+        }
+      } else {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      debugPrint('$e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -118,96 +286,103 @@ class _LoginScreenState extends State<LoginScreen>
       backgroundColor: theme.colorScheme.onPrimary,
       resizeToAvoidBottomInset: true,
       body: CustomBackground(
-        child: AnimatedBuilder(
-          animation: _entryController,
-          builder: (context, _) {
-            return SafeArea(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  vertical: screenHeight * 0.04,
-                  horizontal: screenWidth * 0.02,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Center(
-                      child: Column(
-                        children: [
-                          /// Top logo with spin + floating effect
-                          FadeTransition(
-                            opacity: _fadeLogo,
-                            child: AnimatedBuilder(
-                              animation: _floatAnimation,
-                              builder: (context, child) {
-                                return Transform.translate(
-                                  offset: Offset(
-                                    0,
-                                    _floatController.isAnimating
-                                        ? _floatAnimation.value
-                                        : 0,
-                                  ),
-                                  child: child,
-                                );
-                              },
-                              child: Image.asset(
-                                "assets/images/app-logo-transp.png",
-                                height: screenHeight * 0.12,
-                                width: screenWidth * 0.3,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          ),
-                          SizedBox(height: screenHeight * 0.01),
-
-                          /// Welcome text
-                          ScaleTransition(
-                            scale: _scaleWelcome,
-                            child: Column(
-                              children: [
-                                Text(
-                                  'Welcome back!',
-                                  style: TextStyle(
-                                    color: theme.colorScheme.onSecondary,
-                                    fontSize: screenWidth * 0.055,
-                                    fontWeight: FontWeight.w700,
-                                    fontFamily: fontFamily,
-                                  ),
-                                ),
-                                Text(
-                                  'Login to your account to continue',
-                                  style: TextStyle(
-                                    color: theme.colorScheme.onSecondary,
-                                    fontSize: screenWidth * 0.04,
-                                    fontWeight: FontWeight.w600,
-                                    fontFamily: fontFamily,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(height: screenHeight * 0.03),
-
-                          /// Form and rest
-                          Transform.translate(
-                            offset: Offset(0, _slideForm.value),
-                            child: Opacity(
-                              opacity: _fadeForm.value,
-                              child: _buildFormContent(
-                                theme,
-                                screenHeight,
-                                screenWidth,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+        child: Stack(
+          children: [
+            AnimatedBuilder(
+              animation: _entryController,
+              builder: (context, _) {
+                return SafeArea(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(
+                      vertical: screenHeight * 0.04,
+                      horizontal: screenWidth * 0.02,
                     ),
-                  ],
-                ),
-              ),
-            );
-          },
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Center(
+                          child: Column(
+                            children: [
+                              /// Top logo with spin + floating effect
+                              FadeTransition(
+                                opacity: _fadeLogo,
+                                child: AnimatedBuilder(
+                                  animation: _floatAnimation,
+                                  builder: (context, child) {
+                                    return Transform.translate(
+                                      offset: Offset(
+                                        0,
+                                        _floatController.isAnimating
+                                            ? _floatAnimation.value
+                                            : 0,
+                                      ),
+                                      child: child,
+                                    );
+                                  },
+                                  child: Image.asset(
+                                    "assets/images/app-logo-transp.png",
+                                    height: screenHeight * 0.12,
+                                    width: screenWidth * 0.3,
+                                    fit: BoxFit.contain,
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: screenHeight * 0.01),
+
+                              /// Welcome text
+                              ScaleTransition(
+                                scale: _scaleWelcome,
+                                child: Column(
+                                  children: [
+                                    Text(
+                                      'Welcome back!',
+                                      style: TextStyle(
+                                        color: theme.colorScheme.onSecondary,
+                                        fontSize: screenWidth * 0.055,
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: fontFamily,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Login to your account to continue',
+                                      style: TextStyle(
+                                        color: theme.colorScheme.onSecondary,
+                                        fontSize: screenWidth * 0.04,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: fontFamily,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: screenHeight * 0.03),
+
+                              /// Form and rest
+                              Transform.translate(
+                                offset: Offset(0, _slideForm.value),
+                                child: Opacity(
+                                  opacity: _fadeForm.value,
+                                  child: _buildFormContent(
+                                    theme,
+                                    screenHeight,
+                                    screenWidth,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            if (isLoading)
+              LoadingHelper(screenHeight: screenHeight, screenWidth: screenWidth),
+          ],
         ),
       ),
     );
@@ -333,7 +508,9 @@ class _LoginScreenState extends State<LoginScreen>
               borderColor: theme.colorScheme.primary,
               textColor: theme.colorScheme.primary,
               assetIcon: 'assets/icons/google-icon.png',
-              onPressed: () {},
+              onPressed: () {
+                signInWithGoogle();
+              },
             ),
           ),
         ),
