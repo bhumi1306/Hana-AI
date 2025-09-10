@@ -1,1 +1,1 @@
-const String googleApiKey = 'AIzaSyARfAfv6CdWowCZgZik_BOwwMDYZHNLkH8';
+const String googleApiKey = 'your-gemini-key';
