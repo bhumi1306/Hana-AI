@@ -8,6 +8,10 @@ With smooth **Flutter animations** and a modern UI, Hana AI delivers a fast, int
 
 ---
 
+## Backend Repository
+The Node.js backend for Hana-AI is available here:  
+👉 [Hana-AI-Backend](https://github.com/bhumi1306/Hana-AI-Backend)
+
 ## ✨ Features
 
 - 🔐 **Firebase Google Auth** – Secure sign-in with Google accounts  
